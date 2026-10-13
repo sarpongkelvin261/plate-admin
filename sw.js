@@ -1,6 +1,6 @@
 // Caches only this site's own files. Requests to Google (the sheet) are never cached.
-var CACHE='plate-admin-v1';
-var FILES=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+var CACHE='plate-admin-v2';
+var FILES=['./','./index.html','./manifest.webmanifest','./icon-v2-192.png','./icon-v2-512.png'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(FILES);}));
   self.skipWaiting();

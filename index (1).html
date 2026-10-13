@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Car Plate Tracker</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:linear-gradient(to bottom,#f8fafc,#f1f5f9);color:#0f172a;min-height:100vh;}
+  .wrap{max-width:640px;margin:0 auto;padding:40px 16px;}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
+  .logo{width:44px;height:44px;border-radius:12px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;}
+  h1{font-size:22px;font-weight:600;letter-spacing:-0.01em;}
+  .sub{font-size:13px;color:#64748b;}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+  .card h2{font-size:15px;font-weight:600;margin-bottom:14px;}
+  label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;}
+  input{width:100%;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;margin-bottom:14px;font-family:inherit;}
+  input:focus{outline:2px solid #0f172a;outline-offset:-1px;}
+  .plate{text-transform:uppercase;letter-spacing:0.05em;}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:14px;font-weight:500;padding:9px 16px;font-family:inherit;}
+  .btn-primary{background:#0f172a;color:#fff;width:100%;}
+  .btn-primary:disabled{opacity:0.6;cursor:not-allowed;}
+  .btn-outline{background:#fff;border:1px solid #cbd5e1;color:#0f172a;}
+  .btn-ghost{background:transparent;color:#64748b;padding:4px 8px;}
+  .btn-ghost:hover{color:#ef4444;}
+  .row{display:flex;gap:8px;}
+  .status{display:flex;align-items:center;gap:8px;padding:12px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;margin-bottom:16px;font-size:13px;}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .dot.on{background:#10b981;}
+  .dot.off{background:#cbd5e1;}
+  .dot.err{background:#ef4444;}
+  .dot.pending{background:#f59e0b;}
+  .spin{width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:#64748b;border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .controls{display:flex;gap:8px;margin-bottom:12px;}
+  .search{position:relative;flex:1;}
+  .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);}
+  .search input{padding-left:36px;margin-bottom:0;}
+  .list{display:flex;flex-direction:column;gap:8px;}
+  .item{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;}
+  .plate-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;letter-spacing:0.05em;}
+  .owner{font-size:13px;color:#64748b;margin-top:2px;}
+  .empty{text-align:center;color:#94a3b8;font-size:13px;padding:40px 0;}
+  .footer{text-align:center;font-size:12px;color:#94a3b8;margin-top:24px;}
+  .help{font-size:12px;color:#64748b;line-height:1.6;}
+  .help pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;overflow-x:auto;font-size:11px;margin:8px 0;font-family:ui-monospace,monospace;}
+  .help ol{padding-left:18px;}
+  .help li{margin-bottom:4px;}
+  .muted{font-size:12px;color:#94a3b8;margin-top:8px;}
+  .hidden{display:none;}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1e40af">
+<link rel="icon" href="icon-v2-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo">&#128663;</div>
+    <div>
+      <h1>Car Plate Tracker <span style="font-size:12px;font-weight:600;color:#fff;background:#0f172a;padding:2px 8px;border-radius:6px;vertical-align:middle;">ADMIN</span></h1>
+      <div class="sub">Save plates and owner numbers, then export anywhere.</div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span class="dot off" id="statusDot"></span>
+    <span id="statusText">Google Sheets backup is off</span>
+    <span class="spin hidden" id="spinner"></span>
+    <button class="btn-ghost" id="toggleSetup" style="margin-left:auto;">Setup</button>
+  </div>
+  <div class="card hidden" id="setupCard">
+    <h2>Connect Google Sheets backup</h2>
+    <p class="help" style="margin-bottom:10px;">This copy is already connected to a Google Sheet. You only need the steps below if you want to point it at a <b>different</b> sheet, or to add the "Search everyone's records" feature to a sheet that only has the old doPost code.</p>
+    <div class="help">
+      <ol>
+        <li>Open your Google Sheet, then <b>Extensions &rarr; Apps Script</b>.</li>
+        <li>Delete any code there and paste this:</li>
+      </ol>
+      <pre>function doPost(e) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const data = JSON.parse(e.postData.contents);
+
+  if (data.action === 'delete') {
+    const row = parseInt(data.row, 10);
+    if (row && row > 1 && row <= sheet.getLastRow()) {
+      sheet.deleteRow(row);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ok: true}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["Timestamp", "Plate Number", "Owner Number"]);
+  }
+  sheet.appendRow([new Date(), data.plateNumber, data.ownerNumber]);
+  return ContentService.createTextOutput(JSON.stringify({ok: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const rows = sheet.getDataRange().getValues();
+  const q = (e.parameter.q || '').toLowerCase();
+  const results = [];
+  for (let i = 1; i < rows.length; i++) {
+    const [timestamp, plate, owner] = rows[i];
+    if (!plate) continue;
+    if (!q || String(plate).toLowerCase().includes(q) || String(owner).toLowerCase().includes(q)) {
+      results.push({ row: i + 1, plate_number: plate, owner_number: owner });
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({ok: true, results: results}))
+    .setMimeType(ContentService.MimeType.JSON);
+}</pre>
+      <ol start="3">
+        <li>Click <b>Deploy &rarr; New deployment</b>, choose <b>Web app</b>.</li>
+        <li>Set <b>Who has access</b> to <b>Anyone</b>, click <b>Deploy</b>, and copy the <b>Web app URL</b>.</li>
+        <li>Paste that URL below and click Save.</li>
+      </ol>
+    </div>
+    <input id="sheetUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="row">
+      <button class="btn-primary" id="saveSheet" style="width:auto;flex:1;">Save</button>
+      <button class="btn-outline" id="clearSheet">Disconnect</button>
+    </div>
+    <p class="muted" id="syncMsg"></p>
+  </div>
+
+  <div class="card">
+    <h2>Add a record</h2>
+    <label for="plate">Plate number</label>
+    <input id="plate" class="plate" placeholder="e.g. GT-1234-25">
+    <label for="owner">Owner number</label>
+    <input id="owner" placeholder="e.g. +233 50 123 4567">
+    <button class="btn-primary" id="addBtn">Save record</button>
+  </div>
+
+  <div class="controls">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" placeholder="Search records on this device...">
+    </div>
+    <button class="btn-outline" id="exportCsv">CSV</button>
+    <button class="btn-outline" id="exportJson">JSON</button>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div class="empty" id="empty">No records yet.</div>
+  <div class="footer" id="footer">0 records saved</div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Search everyone's records</h2>
+    <p class="help" style="margin-bottom:10px;">Locked. Log in to search and delete records in the shared Google Sheet.</p>
+
+    <div id="searchLogin">
+      <label for="loginUser">Username</label>
+      <input id="loginUser" placeholder="Username">
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" placeholder="Password">
+      <button class="btn-primary" id="loginBtn" style="width:auto;">Log in</button>
+      <p class="muted" id="loginMsg"></p>
+    </div>
+
+    <div id="searchPanel" class="hidden">
+      <div class="row">
+        <input id="sheetSearch" placeholder="Search by plate or owner number..." style="margin-bottom:0;">
+        <button class="btn-primary" id="sheetSearchBtn" style="width:auto;flex-shrink:0;">Search</button>
+      </div>
+      <div class="list" id="sheetResults" style="margin-top:12px;"></div>
+      <p class="muted" id="sheetSearchMsg"></p>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;">
+        <button class="btn-ghost" id="toggleChangePw" style="padding:4px 0;">Change password</button>
+        <div id="changePwCard" class="hidden" style="margin-top:10px;">
+          <label for="newUser">New username</label>
+          <input id="newUser" placeholder="New username">
+          <label for="newPass">New password</label>
+          <input id="newPass" type="password" placeholder="New password">
+          <button class="btn-outline" id="savePwBtn">Save new login</button>
+          <p class="muted" id="pwMsg"></p>
+        </div>
+        <button class="btn-ghost" id="logoutBtn" style="padding:4px 0;margin-left:12px;">Log out</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Pre-baked connection: this copy ships already pointed at a Google Sheet.
+  // Setup card can still override it with a different sheet, or disconnect it.
+  var DEFAULT_SHEET_URL='https://script.google.com/macros/s/AKfycbzFSghu41Bj6vrzZqdWG64pU6UHKVxINzDqWDGtbULcM772HzVWZ-5pMPeXyuPhldL5/exec';
+
+  var KEY='carplates', SHEET_KEY='carplate_sheet_url', DISABLED_KEY='carplate_sheet_disabled', PENDING_KEY='carplate_pending';
+  var records=JSON.parse(localStorage.getItem(KEY)||'[]');
+  var pending=JSON.parse(localStorage.getItem(PENDING_KEY)||'[]');
+  var syncing=false;
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function save(){localStorage.setItem(KEY,JSON.stringify(records));}
+  function savePending(){localStorage.setItem(PENDING_KEY,JSON.stringify(pending));}
+  function activeUrl(){
+    var custom=localStorage.getItem(SHEET_KEY);
+    if(custom)return custom;
+    if(localStorage.getItem(DISABLED_KEY))return null;
+    return DEFAULT_SHEET_URL;
+  }
+  function render(){
+    var q=$('search').value.toLowerCase();
+    var f=records.filter(function(r){return (r.plate_number||'').toLowerCase().indexOf(q)>-1||(r.owner_number||'').toLowerCase().indexOf(q)>-1;});
+    var html='';
+    f.forEach(function(r){
+      var pendingBadge=isPending(r.id)?'<span style="color:#f59e0b;font-size:11px;margin-left:6px;">&#9679; pending sync</span>':'';
+      html+='<div class="item"><div><div class="plate-num">'+esc(r.plate_number)+pendingBadge+'</div><div class="owner">'+esc(r.owner_number)+'</div></div><button class="btn-ghost" data-id="'+esc(r.id)+'">&#128465;</button></div>';
+    });
+    $('list').innerHTML=html;
+    $('empty').style.display=records.length?'none':'block';
+    $('empty').textContent=records.length?'No matches.':'No records yet.';
+    $('footer').textContent=records.length+' record'+(records.length===1?'':'s')+' saved';
+    var btns=$('list').querySelectorAll('button[data-id]');
+    for(var i=0;i<btns.length;i++){btns[i].onclick=function(){del(this.getAttribute('data-id'));};}
+  }
+  function isPending(id){return pending.some(function(p){return p.id===id;});}
+  function del(id){
+    records=records.filter(function(r){return r.id!==id;});save();
+    pending=pending.filter(function(p){return p.id!==id;});savePending();
+    render();updateStatus();
+  }
+  $('addBtn').onclick=function(){
+    var p=$('plate').value.trim(),o=$('owner').value.trim();
+    if(!p||!o)return;
+    $('addBtn').disabled=true;$('addBtn').textContent='Saving...';
+    var rec={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())),plate_number:p.toUpperCase(),owner_number:o,created:new Date().toISOString()};
+    records.unshift(rec);save();render();
+    $('plate').value='';$('owner').value='';
+    syncOne(rec).then(function(){
+      $('addBtn').disabled=false;$('addBtn').textContent='Save record';
+    });
+  };
+  // Attempts to sync one record. On any failure (offline, server error, etc.)
+  // it's queued in `pending` and retried automatically once back online.
+  function syncOne(rec){
+    var url=activeUrl();
+    if(!url){updateStatus();return Promise.resolve();}
+    syncing=true;updateStatus();
+    return fetch(url,{method:'POST',body:JSON.stringify({plateNumber:rec.plate_number,ownerNumber:rec.owner_number})}).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      pending=pending.filter(function(p){return p.id!==rec.id;});savePending();
+      $('syncMsg').textContent='';
+    }).catch(function(e){
+      if(!isPending(rec.id)){pending.push(rec);savePending();}
+      $('syncMsg').innerHTML='<span style="color:#ef4444;">Last sync failed — will retry automatically: '+esc(e.message)+'</span>';
+    }).then(function(){syncing=false;updateStatus();render();});
+  }
+  // Retries queued records one at a time, stopping at the first failure
+  // (keeps order and avoids hammering the server while offline).
+  function flushPending(){
+    var url=activeUrl();
+    if(!url||!pending.length||syncing||!navigator.onLine)return;
+    syncing=true;updateStatus();
+    var queue=pending.slice();
+    function next(i){
+      if(i>=queue.length){syncing=false;updateStatus();render();return;}
+      var rec=queue[i];
+      fetch(url,{method:'POST',body:JSON.stringify({plateNumber:rec.plate_number,ownerNumber:rec.owner_number})}).then(function(res){
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        pending=pending.filter(function(p){return p.id!==rec.id;});savePending();
+        next(i+1);
+      }).catch(function(){
+        syncing=false;updateStatus();render();
+      });
+    }
+    next(0);
+  }
+  function updateStatus(){
+    var url=activeUrl();
+    if(syncing){$('spinner').classList.remove('hidden');}else{$('spinner').classList.add('hidden');}
+    if(!url){
+      $('statusDot').className='dot off';$('statusText').textContent='Google Sheets backup is off';
+    }else if(pending.length){
+      $('statusDot').className='dot pending';$('statusText').textContent=pending.length+' record'+(pending.length===1?'':'s')+' waiting to sync';
+    }else if(!navigator.onLine){
+      $('statusDot').className='dot off';$('statusText').textContent='Offline — entries will sync when back online';
+    }else{
+      $('statusDot').className='dot on';$('statusText').textContent='Google Sheets backup is on';
+    }
+  }
+  $('toggleSetup').onclick=function(){
+    $('setupCard').classList.toggle('hidden');
+    var url=activeUrl();if(url)$('sheetUrl').value=url;
+  };
+  $('saveSheet').onclick=function(){
+    var v=$('sheetUrl').value.trim();if(!v)return;
+    localStorage.setItem(SHEET_KEY,v);localStorage.removeItem(DISABLED_KEY);
+    $('setupCard').classList.add('hidden');$('syncMsg').textContent='';updateStatus();flushPending();
+  };
+  $('clearSheet').onclick=function(){
+    localStorage.removeItem(SHEET_KEY);localStorage.setItem(DISABLED_KEY,'1');
+    $('sheetUrl').value='';updateStatus();
+  };
+  $('search').oninput=render;
+
+  // Admin login. Username/password are checked by the Apps Script (server
+  // side), so they are not stored in this file. They are kept in memory only
+  // while logged in and sent along with search / delete / change-password.
+  var loggedIn=false, adminU='', adminP='';
+
+  function authQS(){return 'u='+encodeURIComponent(adminU)+'&p='+encodeURIComponent(adminP);}
+
+  $('loginBtn').onclick=function(){
+    var u=$('loginUser').value.trim(),p=$('loginPass').value;
+    var url=activeUrl();
+    if(!url){$('loginMsg').innerHTML='<span style="color:#ef4444;">No Google Sheet connected — open Setup above.</span>';return;}
+    if(!u||!p)return;
+    $('loginBtn').disabled=true;$('loginMsg').textContent='Checking...';
+    fetch(url+'?action=check&u='+encodeURIComponent(u)+'&p='+encodeURIComponent(p)).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      return res.json();
+    }).then(function(data){
+      if(!data.ok){$('loginMsg').innerHTML='<span style="color:#ef4444;">Incorrect username or password.</span>';return;}
+      adminU=u;adminP=p;loggedIn=true;
+      $('searchLogin').classList.add('hidden');
+      $('searchPanel').classList.remove('hidden');
+      $('loginMsg').textContent='';
+      $('loginUser').value='';$('loginPass').value='';
+    }).catch(function(e){
+      $('loginMsg').innerHTML='<span style="color:#ef4444;">Could not reach the Sheet ('+esc(e.message)+').</span>';
+    }).then(function(){$('loginBtn').disabled=false;});
+  };
+  $('loginPass').addEventListener('keydown',function(e){if(e.key==='Enter')$('loginBtn').click();});
+
+  $('logoutBtn').onclick=function(){
+    loggedIn=false;adminU='';adminP='';
+    $('searchPanel').classList.add('hidden');
+    $('changePwCard').classList.add('hidden');
+    $('searchLogin').classList.remove('hidden');
+    $('sheetResults').innerHTML='';$('sheetSearch').value='';$('sheetSearchMsg').textContent='';
+  };
+
+  $('toggleChangePw').onclick=function(){$('changePwCard').classList.toggle('hidden');};
+  $('savePwBtn').onclick=function(){
+    if(!loggedIn)return;
+    var u=$('newUser').value.trim(),p=$('newPass').value;
+    var url=activeUrl();
+    if(!u||!p){
+      $('pwMsg').innerHTML='<span style="color:#ef4444;">Enter both a username and password.</span>';
+      return;
+    }
+    if(!url)return;
+    $('savePwBtn').disabled=true;$('pwMsg').textContent='Saving...';
+    fetch(url,{method:'POST',body:JSON.stringify({action:'changeLogin',u:adminU,p:adminP,newU:u,newP:p})}).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      return res.json();
+    }).then(function(data){
+      if(!data.ok)throw new Error(data.message||'Not allowed');
+      adminU=u;adminP=p;
+      $('newUser').value='';$('newPass').value='';
+      $('pwMsg').textContent='Saved. Use the new login next time, on any device.';
+    }).catch(function(e){
+      $('pwMsg').innerHTML='<span style="color:#ef4444;">Could not save: '+esc(e.message)+'</span>';
+    }).then(function(){$('savePwBtn').disabled=false;});
+  };
+
+  // Searches the live Google Sheet via the Apps Script doGet endpoint, so it
+  // finds records saved by anyone on any device, not just this one.
+  function sheetSearch(){
+    if(!loggedIn)return;
+    var url=activeUrl();
+    var q=$('sheetSearch').value.trim();
+    if(!url){
+      $('sheetSearchMsg').innerHTML='<span style="color:#ef4444;">No Google Sheet connected — open Setup above.</span>';
+      return;
+    }
+    $('sheetSearchBtn').disabled=true;$('sheetSearchBtn').textContent='Searching...';
+    $('sheetSearchMsg').textContent='';
+    fetch(url+'?q='+encodeURIComponent(q)+'&'+authQS()).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      return res.json();
+    }).then(function(data){
+      if(!data.ok)throw new Error(data.message||'Search failed');
+      var html='';
+      data.results.forEach(function(r){
+        html+='<div class="item"><div><div class="plate-num">'+esc(r.plate_number)+'</div><div class="owner">'+esc(r.owner_number)+'</div></div><button class="btn-ghost" data-row="'+r.row+'">&#128465;</button></div>';
+      });
+      $('sheetResults').innerHTML=html;
+      var btns=$('sheetResults').querySelectorAll('button[data-row]');
+      for(var i=0;i<btns.length;i++){
+        btns[i].onclick=function(){sheetDelete(parseInt(this.getAttribute('data-row'),10));};
+      }
+      if(!data.results.length){
+        $('sheetSearchMsg').textContent='No matches in the Sheet.';
+      }
+    }).catch(function(e){
+      $('sheetResults').innerHTML='';
+      $('sheetSearchMsg').innerHTML='<span style="color:#ef4444;">Search failed — this sheet may still have the old script. Reconnect via Setup to add search support. ('+esc(e.message)+')</span>';
+    }).then(function(){
+      $('sheetSearchBtn').disabled=false;$('sheetSearchBtn').textContent='Search';
+    });
+  }
+  $('sheetSearchBtn').onclick=sheetSearch;
+  $('sheetSearch').addEventListener('keydown',function(e){if(e.key==='Enter')sheetSearch();});
+
+  // Deletes a row directly from the shared Google Sheet by its row number
+  // (as returned by doGet), then re-runs the current search to refresh the list.
+  function sheetDelete(row){
+    if(!loggedIn)return;
+    var url=activeUrl();
+    if(!url||!row)return;
+    if(!confirm('Delete this record from the Google Sheet? This cannot be undone.'))return;
+    $('sheetSearchMsg').textContent='Deleting...';
+    fetch(url,{method:'POST',body:JSON.stringify({action:'delete',row:row,u:adminU,p:adminP})}).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      return res.json();
+    }).then(function(data){
+      if(!data.ok)throw new Error(data.message||'Not allowed');
+      $('sheetSearchMsg').textContent='Deleted.';
+      sheetSearch();
+    }).catch(function(e){
+      $('sheetSearchMsg').innerHTML='<span style="color:#ef4444;">Delete failed: '+esc(e.message)+'</span>';
+    });
+  }
+
+  function download(content,filename,mime){var b=new Blob([content],{type:mime});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;document.body.appendChild(a);a.click();a.remove();}
+  $('exportCsv').onclick=function(){var rows=records.map(function(r){return '"'+(r.plate_number||'').replace(/"/g,'""')+'","'+(r.owner_number||'').replace(/"/g,'""')+'"';}).join('\n');download('plate_number,owner_number\n'+rows,'car-plates.csv','text/csv');};
+  $('exportJson').onclick=function(){download(JSON.stringify(records.map(function(r){return{plate_number:r.plate_number,owner_number:r.owner_number};}),null,2),'car-plates.json','application/json');};
+  window.addEventListener('online',flushPending);
+  setInterval(flushPending,30000);
+  updateStatus();
+  flushPending();
+  render();
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+</body>
+</html>

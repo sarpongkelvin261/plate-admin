@@ -50,6 +50,9 @@
   .muted{font-size:12px;color:#94a3b8;margin-top:8px;}
   .hidden{display:none;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1e40af">
+<link rel="icon" href="icon-192.png">
 </head>
 <body>
 <div class="wrap">
@@ -427,5 +430,6 @@ function doGet(e) {
   flushPending();
   render();
 </script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>
